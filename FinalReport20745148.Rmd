@@ -1,0 +1,293 @@
+---
+title: "STAT331 Final Report"
+author: "Zeheng Zhang"
+date: "8/7/2020"
+output:
+  html_document:
+    df_print: paged
+  fig_caption: yes
+  pdf_document: null
+---
+
+
+* Student ID: 20745148  
+
+```{r setup, include=FALSE}
+library(MASS)
+library(lmtest)
+load("final.Rdata")
+factor(dtrain$heat)
+factor(dtrain$ac)
+factor(dtrain$style)
+factor(dtrain$grade)
+factor(dtrain$extwall)
+```
+## 1.Introduction  
+In the course STAT331 we have learned different techniques to model the relationship between a response variable and several explanatory variables via Multiple Linear Regression Model(MLRM). In this report, relationships between real estate price (the response variable) and several other factors (the explanatory variables) potentially influencing the price will be analyzed based on the dataset dtrain. The modeling process contains three major steps: preliminary analysis, model selection and model diagnostics. 
+
+## 2. Preliminary Analysis
+
+### 2.1 Dataset description
+The Dataset contains following variables:  
+
+* Price: the response variable we want to predict  
+* bathrm: number of bathrooms  
+* hf_bathrm: number of half bathrooms  
+* heat: heating type  
+  Possible values: "Air Exchng" "Elec Base Brd" "Forced Air" "Gravity Furnac" "Hot Water Rad"  
+  "Ht Pump" "No Data" "Wall Furnace" "Warm Cool" "Water Base Brd"  
+* ac: Whether or not air conditioning exists. Possible value: "Y", "N"  
+* rooms: number of rooms  
+* bedrm: number of bedrooms  
+* ayb: the earliest time the main portion of the building was built  
+* yr_rmdl: year structure was remodelled  
+* eyb: the year an improvement was built more recent than actual year built  
+* stories: number of stories in primary dwelling  
+* saledate: date of most recent sale  
+* gba: gross building area in square feet  
+* style: style type.  
+  Possible values: "1 Story" "1.5 Story Fin" "1.5 Story Unfin" "2 Story" "2.5 Story Fin" 
+  "2.5 Story Unfin" "3 Story" "4 Story" "Bi-Level" "Default" "Split Foyer" "Split Level"  
+* grade: Grade of quality.   
+  Possible values: "Above Average" "Average" "Fair Quality" "Good Quality" "Low Quality" "Superior" "Very Good"  
+* extwall: exterior wall type  
+  Possible values: "Adobe" "Aluminum" "Brick Veneer" "Brick/Siding" "Brick/Stone" "Brick/Stucco" "Common Brick" 
+  "Concrete" "Concrete Block" "Face Brick" "Hardboard" "Metal Siding" "Shingle" "Stone" "Stone Veneer" "Stone/Siding"
+  "Stone/Stucco" "Stucco" "Stucco Block" "Vinyl Siding" "Wood Siding"  
+* kitchens: number of kitchens  
+* fireplaces: number of fireplaces  
+* landarea: land area of property in square feet  
+  
+### 2.2 Basic data checking
+
+The 18 explanatory variables originally consist of 13 numerical variables and 5 categorical variables. (The saledate variable is of the data type character, for example "2013-02-20"). In common sense, saledate of a real estate often has quantitative relationship with its price. In order to study this relationship, we convert saledate to a numerical variable:  
+```{r convert}
+dtrain$saledate <- as.numeric(as.Date(dtrain$saledate)) # Counting days from 0000-00-00
+```
+
+By checking the dataset, we found that there are missing values in the columns yr_rmdl and stories, so we replace the missing values with their column mean. Since only a small number of values are missing, this will not largely decrease accuracy of the model.
+```{r imputation, include=FALSE}
+average_yr_rmdl <- 2006
+average_stories <- 1.824174
+```
+```{r imputation2}
+dtrain$yr_rmdl[is.na(dtrain$yr_rmdl)] <- average_yr_rmdl
+dtrain$stories[is.na(dtrain$stories)] <- average_stories
+```
+\newpage
+
+### 2.3 y-x relationship analysis
+```{r fig1, echo=FALSE, fig.height = 2, fig.cap = "Y-X pair plots"}
+#pairs(dtrain[,c(12,1,2,5,6)])
+par(mfrow=c(1,4))
+plot(dtrain$bathrm,dtrain$price,xlab = "bathrm", ylab = "price")
+plot(dtrain$hf_bathrm,dtrain$price,xlab = "hf_bathrm", ylab = "price")
+plot(dtrain$rooms,dtrain$price,xlab = "room", ylab = "price")
+plot(dtrain$bedrm,dtrain$price,xlab = "bedrm", ylab = "price")
+```
+  
+In Figure 1 we see pair plots between price and room number variables (bathrm, hf_bathrm, rooms, bedrm). Positive correlations can be seen in the plots price~bathrm, price~rooms and price~bedrm.
+
+```{r fig2, echo=FALSE, fig.height = 2, fig.cap = "Y-X pair plots"}
+par(mfrow=c(1,4))
+plot(dtrain$ayb,dtrain$price,xlab = "ayb", ylab = "price")
+plot(dtrain$yr_rmdl,dtrain$price,xlab = "yr_rmdl", ylab = "price")
+plot(dtrain$eyb,dtrain$price,xlab = "eyb", ylab = "price")
+plot(dtrain$saledate,dtrain$price,xlab = "saledate", ylab = "price")
+```
+
+In Figure 2 we see pair plots between price and time variables (ayb, yr_rmdl, eyb, saledate). Positive correlations can be seen in the plots price~yr_rmdl and price~saledate.
+
+```{r fig3, echo=FALSE, fig.width = 10, fig.height = 2, fig.cap = "Y-X pair plots"}
+par(mfrow=c(1,5))
+plot(dtrain$stories,dtrain$price,xlab = "stories", ylab = "price")
+plot(dtrain$gba,dtrain$price,xlab = "gba", ylab = "price")
+plot(dtrain$kitchens,dtrain$price,xlab = "kitchens", ylab = "price")
+plot(dtrain$fireplaces,dtrain$price,xlab = "fireplaces", ylab = "price")
+plot(dtrain$landarea,dtrain$price,xlab = "landarea", ylab = "price")
+```
+
+In Figure 3 we see pair plots between price and other variables (stories,gba,kitchens,fireplaces,landarea). Positive correlations can be seen in the plots price~stories and price~gba.
+\newpage
+
+### 2.4 x-x relationship analysis  
+```{r fig4, echo=FALSE, fig.width = 10, fig.height = 10, fig.cap = "non-time variables pair plots"}
+pairs(dtrain[,c(1,2,5,6,10,13,17,18,19)])
+```
+
+In Figure 4, positive correlation between non-time variables can be seen in the plots bathrm~rm, bathrm~bedrm, bathrm~stories, bathrm~gba, rooms~bedrm, rooms~gba, bedrm~stories and bedrm~gba
+\newpage
+
+```{r fig5, echo=FALSE, fig.cap = "Time variables pair plots"}
+pairs(dtrain[,c(7,8,9,11)])
+```
+
+In Figure 5, positive correlation between can be seen in the plot ayb~eyb  
+
+## 3. Model Selection
+
+In order to determine the best fitted model, we need to compare several different models. We use different model generating techniques to maximize our chance to find the best model.
+
+### 3.1 Building Model based on plots
+
+Based on interpretation of the y-x pair plots, bathrm, rooms, bedrm, yr_rmdl, saledate, stories and gba might be necessary variables (since they have correlation with price) in the final model, so we build a linear model using all these potentially important numerical variables
+```{r mb1}
+model1 <- lm(price~bathrm + rooms + bedrm + yr_rmdl + saledate + gba, data = dtrain)
+```
+
+After building the basic model, we now try to add categorical variables to the model and see if they improves the model.
+```{r cv, echo=FALSE}
+fullcategoricalmodel <- lm(price~bathrm + rooms + bedrm + yr_rmdl + saledate + gba + heat + ac + style + grade + extwall, data = dtrain)
+```
+```{r cv2}
+addterm(model1, scope = fullcategoricalmodel, test = "F")
+```
+
+After running F-test on the model obtained by adding the categorical variable grade into our basic model, we found that the p-value is extremely, which implies that grade is an important variable. Then we repeat this process to try to add other categorical variables into our model until the rest categorical variables are not important.
+After this forward selection process, the important categorical variables added into our model are grade, extwall and style. Hence our basic model becomes:
+```{r fm1}
+model1 <- lm(price~bathrm + rooms + bedrm + yr_rmdl + saledate + gba + grade + extwall 
+             + style, data = dtrain)
+```
+
+### 3.2 Building model using automated methods
+
+Now we try to automatically generate a different models using stepwise regression by AIC (Criteria used to compare models). Stepwise regression is a combined greedy algorithm that starts each loop with a forward selection like how we add categorical variables in 3.1 to add an important variable. Then it checks all predictors of their AIC to drop the least significant predictor until no predictors can be added or removed.  
+```{r sr1, echo=T, results='hide'}
+nullmodel<-lm(price~1, data=dtrain)
+fullmodel<-lm(price~., data=dtrain)
+stepwise_model<-step(nullmodel, scope=list(upper=fullmodel), direction = "both")
+```
+```{r sr2, echo=T}
+stepwise_model$call
+```
+The predictors selected by stepwise regression are:  
+saledate, gba, grade, ayb, bathrm, fireplaces, extwall, eyb, hf_bathrm, rooms, landarea, kitchens  
+
+### 3.3 Model comparison
+Now we compare the two models using different criteria to choose our final model
+```{r cp1, results='hide'}
+summary(model1)
+summary(stepwise_model)
+```
+Adjusted R-squared is 0.7339 for model1 and 0.7615 for stepwise_model
+```{r cp2}
+AIC(model1)
+AIC(stepwise_model)
+```
+model1 has greater AIC than stepwise_model (model with lower AIC implies is better fitted)
+```{r cp3}
+BIC(model1)
+BIC(stepwise_model)
+```
+model1 has greater BIC than stepwise_model (model with lower BIC implies is better fitted)  
+Based on the comparison, stepwise_model is better fitted than model1, so we choose stepwise_model to be our final model.
+
+## 4.Model Diagnostics
+
+## 4.1 Assumptions Checking
+We need to check four assumptions of multiple linear regression model to assure the correctness of the model.
+
+```{r mc, fig.cap="Q-Q plot"}
+qqnorm(residuals(stepwise_model))
+```
+
+In figure 6, the pattern implies that the normality assumption is satisfied.  
+
+```{r sresid, echo=F}
+studresid <- resid(stepwise_model)/sqrt(sigma(stepwise_model)^2*(1-hatvalues(stepwise_model)))
+studresid[is.infinite(studresid)] <- 0
+```
+```{r mc2, fig.cap="Studentized residuals versus fitted values"}
+plot(fitted.values(stepwise_model), studresid, ylab="Studentized Residual", xlab = "Fitted Value")
+abline(h=2)
+abline(h=-2)
+```
+
+In figure 7, the points are distributed around 0, so mean of zero is satisfied. To satisfy the constant variance assumption, the points should lie within a horizontal band, yet the points in the plot exhibit a decreasing pattern at left, so the constant variance assumption is not satisfied.
+
+## 4.2 Transformation
+In order to improve the model, we apply variance stabilizing transformation to the model.
+To decide what transformation to be adopted, we use the built-in boxcox function in R to check the model:
+```{r bc1, echo=F}
+library(MASS)
+```
+```{r bc2}
+bc<-boxcox(stepwise_model, lambda=seq(-1,1,1/20))
+bc$x[which.max(bc$y)]
+```
+By Box-Cox transformation, we transform the response variable, price to be price^0.3535354:
+```{r tf1, echo=T}
+stepwise_model<-lm(price^0.3535354 ~ saledate + gba + grade + ayb + bathrm + 
+                     fireplaces + extwall + eyb + hf_bathrm + rooms + landarea + 
+                     kitchens, data = dtrain)
+```
+
+## 4.3 Assumptions Checking 2
+To make sure that the transformation is effective, we check the assumptions again.  
+
+```{r mc3, fig.cap="Q-Q plot"}
+qqnorm(residuals(stepwise_model))
+```
+
+In figure 8, the pattern implies that the normality assumption is satisfied.  
+
+```{r sresid2, echo=F}
+studresid <- resid(stepwise_model)/sqrt(sigma(stepwise_model)^2*(1-hatvalues(stepwise_model)))
+studresid[is.infinite(studresid)] <- 0
+```
+```{r mc4, fig.cap="Studentized residuals versus fitted values"}
+plot(fitted.values(stepwise_model), studresid, ylab="Studentized Residual", xlab = "Fitted Value")
+abline(h=2)
+abline(h=-2)
+```
+
+In figure 9, the points are distributed around 0, so mean of zero is satisfied. The points lie within a horizontal band around zero, no special pattern is exhibited and approximately 95% of the points lie within (-2,2), so the constant variance assumption is satisfied.
+
+## 4.4. Data Checking
+In order to improve the model, we check any extreme observations in the dataset by searching for outliers. An outlier is a particular observation with unusual value in y or x;
+
+### 4.4.1 Outliers in Y-direction
+By the definition of outlier in y, any observation i with studentized residual |$d_i$| > 2.5 is a outlier in y.  
+All Outliers in y with their studentized residuals in the dataset are:
+```{r oy, echo=F}
+studresid[abs(studresid) > 2.5]
+```
+### 4.4.2 Outliers in X-direction
+By the definition of outlier in x, any observation i with hat value $h_{ii}$ > 2(p+1)/n = 2*37/1303 = 0.056792 is a outlier in x.  
+All Outliers in x with their studentized residuals in the dataset are:  
+```{r ox, echo=F}
+hatvalues(stepwise_model)[hatvalues(stepwise_model) > 0.056792]
+```
+
+### 4.4.3 Influetial points
+By the definition of influential points, any observation i with cook's distance $D_i$ > $F_{0.5}$(p+1, n-p-1) =  0.056792 is a outlier in x.
+No influential points detected
+```{r ip, echo=F, results='hide'}
+qf <- qf(0.5,37,1266)
+cd <- cooks.distance(stepwise_model)
+cd[is.na(cd)] <- 0
+```
+
+Since there is no evidence for recording errors, these outliers are retained in the dataset.
+
+## 5. Model intepretation
+
+The final model is $price^{0.3535354} \sim \beta_0 + \beta_1*saleyear + \beta_2*gba + \beta_3*I_{grade=Average} + \beta_4*I_{grade=Fair Quality} +  \beta_5*I_{grade=Good Quality} + \beta_6*I_{grade=Low Quality} + \beta_7*I_{grade=Superior} + \beta_8*I_{grade=Very Good} + \beta_9*ayb + \beta_{10}*bathrm + \beta_{11}*fireplaces + \beta_{12}*I_{extwall=Aluminum} + \beta_{13}*I_{extwall=Brick Veneer} + \beta_{14}*I_{extwall=Brick/Siding} + \beta_{15}*I_{extwall=Brick/Stone} + \beta_{16}*I_{Brick/Stucco} + \beta_{17}*I_{extwall=Common Brick} + \beta_{18}*I_{extwall=Concrete} + \beta_{19}*I_{extwall=Concrete Block} + \beta_{20}*I_{extwall=Face Brick} + \beta_{21}*I_{extwall=Hardboard} + \beta_{22}*I_{extwall=Metal Siding} + \beta_{23}*I_{extwall=Shingle} + \beta_{24}*I_{extwall=Stoneeyb} + \beta_{25}*I_{extwall=Stone Veneer} + \beta_{26}*I_{extwall=Stone/Siding} + \beta_{27}*I_{extwall=Stone/Stucco} + \beta_{28}*I_{extwall=Stucco} + \beta_{29}*I_{extwall=Stucco Block} \beta_{30}*I_{extwall=Vinyl Siding} + \beta_{31}*I_{extwallWood Siding} + \beta_{32}*eyb + \beta_{33}*hf\_bathrm + \beta_{34}*rooms + \beta_{35}*landarea + \beta_{36}*kitchens + \epsilon$,  
+where $\epsilon \sim$ i.i.d. N(0,$\sigma^2$)
+
+The numerical explanatory variable included in this model are: saledate, gba, ayb, bathrm, fireplaces, eyb, hf_bathrm, rooms, landarea, kitchens  
+The categorical explanatory variables included in this model are: grade, extwall
+
+The estimated coefficients are:  
+```{r coef, echo=F}
+coef(stepwise_model)
+```
+
+The intercept $\beta_0$ is the average response when all numerical predictors are equal to 0 and all categorical predictors are equal to their default value ("Above Average" for grade and "Adobe" for extwall)  
+
+Coefficients of numerical predictors are the average amount of increase/decrease in real estate price when the corresponding predictor increase/decrease by one unit while all other predictors remains the same  
+
+Coefficients of categorical predictors are the average amount of change in real estate price when the corresponding factor is changed from the default value ("Above Average" for grade and "Adobe" for extwall) to another value 
+
+$\epsilon$ is the random error. It represent everything the model does not have into account such as factors that may interfere the price and measuring inaccuracies.
